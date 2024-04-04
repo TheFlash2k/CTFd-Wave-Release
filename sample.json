@@ -1,0 +1,31 @@
+{
+	"notify-discord": true,
+	"force-deploy": true,
+	"wave-1": {
+		"challenges": [
+			"jack-sparrow",
+			"jack-sparrow-2",
+			"jack-sparrow-3"
+		],
+		"message": "Wave-1 challenges have been released. Next wave will be released on NEXT_TIMESTAMP UTC!",
+		"timestamp": 0
+	},
+	"wave-2": {
+		"challenges": [
+			"TEST1",
+			"Test2",
+			"test3"
+		],
+		"message": "Wave-2 challenges have been released. Next wave will be released on NEXT_TIMESTAMP UTC!",
+		"timestamp": 0
+	},
+	"wave-3": {
+		"challenges": [
+			"test4",
+			"test5",
+			"test6"
+		],
+		"message": "Final wave  has been released. Good luck!",
+		"timestamp": 0
+	}
+}

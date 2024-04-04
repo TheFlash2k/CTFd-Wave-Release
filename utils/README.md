@@ -1,0 +1,1 @@
+All of these utils have been used from my own repo: https://github.com/TheFlash2k/CTFd-CLI/blob/main/ctfd_cli/utils/
