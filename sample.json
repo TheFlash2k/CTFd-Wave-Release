@@ -7,8 +7,8 @@
 			"jack-sparrow-2",
 			"jack-sparrow-3"
 		],
-		"message": "Wave-1 challenges have been released. Next wave will be released on NEXT_TIMESTAMP UTC!",
-		"timestamp": 0
+		"message": "Wave 1 challenges have been released. Next wave will be released on NEXT_TIMESTAMP UTC!",
+		"timestamp": 1712241480
 	},
 	"wave-2": {
 		"challenges": [
@@ -16,8 +16,8 @@
 			"Test2",
 			"test3"
 		],
-		"message": "Wave-2 challenges have been released. Next wave will be released on NEXT_TIMESTAMP UTC!",
-		"timestamp": 0
+		"message": "Wave 2 challenges have been released. Next wave will be released on NEXT_TIMESTAMP UTC!",
+		"timestamp": 1712241600
 	},
 	"wave-3": {
 		"challenges": [

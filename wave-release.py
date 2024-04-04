@@ -4,13 +4,17 @@ import argparse
 import json
 from pprint import pprint
 import os
-import discord
+from discord import Webhook
+import aiohttp
 from datetime import datetime
 import time
+import asyncio
+
 
 from utils.ctfd import CTFd
 from utils.handler import RequestHandler, Mode
 from utils.logger import logger, logging
+from utils.utils import get_env
 
 class CTFd_Handler:
     """ This class' methods will be used for interaction with the CTFd instance. """
@@ -47,20 +51,37 @@ class CTFd_Handler:
     def hide_challenge(self, id: int):
         return self.__modify_challenge__(id, "hidden")
 
-    def notify(self, msg: str, challs: list = None):
-        msg = f"**{msg}**"
-        msg += "\n\n Following challenges have been released:\n\n"
-        i = 1
-        for chal in challs:
-            msg += f"{i}. [{chal['name']}]({self.ctfd.ctfd_instance}/challenges#{chal['name']}-{chal['id']}) (**{chal['category']}**)\n\n"
-            i += 1
-
+    def notify(self, msg: str, title: str):
         return RequestHandler.MakeRequest(
             mode=Mode.POST,
             url=f"{self.ctfd.ctfd_instance}/api/v1/notifications",
             token=self.ctfd.ctfd_token,
-            json={"title": "New Wave Released", "content": msg}
+            json={"title": title, "content": msg}
         ).json()
+
+def get_notification_message(msg: str, challs: list, for_discord: bool = False):
+    title = "New Wave Released"
+    ln = "\n" if for_discord else "\n\n"
+    msg = f"**{msg}**"
+    msg += f"{ln}Following challenges have been released:{ln}"
+    i = 1
+    for chal in challs:
+        name = chal['name'].replace("*", "").replace("#", "")
+        from urllib.parse import quote
+        msg += f"{i}. [{name}]({handler.ctfd.ctfd_instance}/challenges#{quote(chal['name'])}-{chal['id']}) (**{chal['category']}**){ln}"
+        i += 1
+    if for_discord:
+        msg = f"## **__{title}__**{ln}" + msg
+    # msg += f"{ln}{ln}**Powered by [TheFlash2k](https://theflash2k.me)'s [Wave Release](https://github.com/theflash2k/CTFd-Wave-Release)**"
+    return msg, title
+
+async def notify_discord(msg, challs):
+    async with aiohttp.ClientSession() as session:
+        try:
+            webhook_url = get_env("DISCORD_WEBHOOK", err_msg="DISCORD_WEBHOOOK not set!")
+        except: return
+        webhook = Webhook.from_url(webhook_url, session=session)
+        await webhook.send(msg)
 
 def _err(msg):
     """ A small wrapper around logger.error to close program on invoke """
@@ -73,7 +94,6 @@ def wait_until(end_datetime):
         if diff < 0: return       # In case end_datetime was in past to begin with
         time.sleep(diff/2)
         if diff <= 0.1: return
-
 
 def parse_challenges(json_file: str, ctfd_challs: list) -> dict:
 
@@ -129,7 +149,7 @@ def parse_challenges(json_file: str, ctfd_challs: list) -> dict:
                 valid_challs[__n][k] = wave[k]
     return valid_challs
 
-def deploy(info: dict):
+async def deploy(info: dict):
     notify = info["notify-discord"]
     waves = [i for i in list(info.keys()) if "wave" in i.lower()]
     if waves == []: _err("wave-{IDX} not specified in JSON")
@@ -145,9 +165,12 @@ def deploy(info: dict):
                 continue
         wave_data = info[wave]
         challs = wave_data["challenges"]
+
         curr_time = datetime.timestamp(datetime.now())
+
         deploy_time = wave_data["timestamp"]
         dt = datetime.fromtimestamp(deploy_time)
+
         if curr_time > deploy_time:
             logger.warning(f"{wave} was supposed to deployed on {dt}")
             if not info["force-deploy"]:
@@ -166,8 +189,12 @@ def deploy(info: dict):
             logger.info(f"Deployed {chall['name']} of {wave}")
         
         if i < len(waves) - 1: next_time = info[waves[i+1]]["timestamp"]
-        msg = wave_data["message"].replace("NEXT_TIMESTAMP", str(datetime.fromtimestamp(next_time)))
-        handler.notify(msg, challs)
+        _msg = wave_data["message"].replace("NEXT_TIMESTAMP", str(datetime.fromtimestamp(next_time)))
+        msg, title = get_notification_message(_msg, challs)
+        handler.notify(msg, title)
+        if info["notify-discord"]:
+            msg, title = get_notification_message(_msg, challs, for_discord=True)
+            await notify_discord(msg, challs)
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='CTFd Waves Release')
@@ -180,4 +207,4 @@ if __name__ == "__main__":
     handler = CTFd_Handler(args.ctfd_instance, args.ctfd_token)
     ctfd_challs = handler.get_challenges()
     info = parse_challenges(args.waves_file, ctfd_challs)
-    deploy(info)
+    asyncio.run(deploy(info))
