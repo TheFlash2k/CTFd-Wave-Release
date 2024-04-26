@@ -11,6 +11,6 @@ def get_env(key: str, curr: str = None, default: str = None, err_msg: str = None
     if curr != None:
         return curr
     value = os.getenv(key, default)
-    if value is None:
+    if value is None or value == "" or len(value) == 0:
         raise Exception(err_msg)
     return value

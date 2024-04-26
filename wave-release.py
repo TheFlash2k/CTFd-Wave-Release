@@ -7,57 +7,15 @@ import os
 from discord import Webhook
 import aiohttp
 from datetime import datetime
+import pytz
 import time
 import asyncio
 
 
-from utils.ctfd import CTFd
+from utils.ctfd import CTFd_Handler
 from utils.handler import RequestHandler, Mode
 from utils.logger import logger, logging
 from utils.utils import get_env
-
-class CTFd_Handler:
-    """ This class' methods will be used for interaction with the CTFd instance. """
-    def __init__(self, instance: str, token: str):
-        self.ctfd = CTFd(instance=instance, token=token)
-    
-    def get_challenges(self) -> list:
-        """ Returns the list of all the challenges currently deployed
-        """
-        return RequestHandler.MakeRequest(
-            mode=Mode.GET,
-            url=f"{self.ctfd.ctfd_instance}/api/v1/challenges?view=admin",
-            token=self.ctfd.ctfd_token
-        ).json()["data"]
-    
-    def __modify_challenge__(self, id: int, mode: str):
-        return RequestHandler.MakeRequest(
-            mode=Mode.PATCH,
-            url=f"{self.ctfd.ctfd_instance}/api/v1/challenges/{id}",
-            token=self.ctfd.ctfd_token,
-            json={ "state": mode }
-        ).json()["data"]
-
-    def get_challenge_state(self, id: int):
-        return RequestHandler.MakeRequest(
-            mode=Mode.GET,
-            url=f"{self.ctfd.ctfd_instance}/api/v1/challenges/{id}",
-            token=self.ctfd.ctfd_token
-        ).json()["data"]["state"]
-
-    def unhide_challenge(self, id: int):
-        return self.__modify_challenge__(id, "visible")
-    
-    def hide_challenge(self, id: int):
-        return self.__modify_challenge__(id, "hidden")
-
-    def notify(self, msg: str, title: str):
-        return RequestHandler.MakeRequest(
-            mode=Mode.POST,
-            url=f"{self.ctfd.ctfd_instance}/api/v1/notifications",
-            token=self.ctfd.ctfd_token,
-            json={"title": title, "content": msg}
-        ).json()
 
 def get_notification_message(msg: str, challs: list, for_discord: bool = False):
     title = "New Wave Released"
@@ -70,17 +28,17 @@ def get_notification_message(msg: str, challs: list, for_discord: bool = False):
         from urllib.parse import quote
         msg += f"{i}. [{name}]({handler.ctfd.ctfd_instance}/challenges#{quote(chal['name'])}-{chal['id']}) (**{chal['category']}**){ln}"
         i += 1
-    if for_discord:
-        msg = f"## **__{title}__**{ln}" + msg
-    # msg += f"{ln}{ln}**Powered by [TheFlash2k](https://theflash2k.me)'s [Wave Release](https://github.com/theflash2k/CTFd-Wave-Release)**"
+    if for_discord: msg = f"## **__{title}__**{ln}" + msg
     return msg, title
 
-async def notify_discord(msg, challs):
+async def notify_discord(msg, webhook_url: str):
     async with aiohttp.ClientSession() as session:
         try:
-            webhook_url = get_env("DISCORD_WEBHOOK", err_msg="DISCORD_WEBHOOOK not set!")
-        except: return
-        webhook = Webhook.from_url(webhook_url, session=session)
+            webhook = Webhook.from_url(webhook_url, session=session)
+        except Exception as E:
+            logger.error(f"An error occurred while trying to create a webhook object: {E.__repr__()}")
+            logger.error("Invalid Discord Webhook URL")
+            return
         await webhook.send(msg)
 
 def _err(msg):
@@ -97,7 +55,8 @@ def wait_until(end_datetime):
 
 def parse_challenges(json_file: str, ctfd_challs: list) -> dict:
 
-    """ Checks if all of the challenges specified in the JSON are valid ctfd_challs. If not, errors out.
+    """
+        Checks if all of the challenges specified in the JSON are valid ctfd_challs. If not, errors out.
     """
     logger.info("Parsing all the specified challenges...")
     if not os.path.isfile(json_file): _err(f"{json_file} doesn't exist!")
@@ -154,15 +113,8 @@ async def deploy(info: dict):
     waves = [i for i in list(info.keys()) if "wave" in i.lower()]
     if waves == []: _err("wave-{IDX} not specified in JSON")
 
-    if not os.path.isfile(".deployed"):
-        with open(".deployed", "w") as f: f.write("")
-
     for i in range(len(waves)):
         wave = waves[i]
-        with open(".deployed", "r") as f:
-            for line in f.readlines():
-                logger.info(f"{wave} has already been deployed!")
-                continue
         wave_data = info[wave]
         challs = wave_data["challenges"]
 
@@ -183,27 +135,48 @@ async def deploy(info: dict):
         logger.info(f"Deploying challenges of {wave} [Total challenges: {len(challs)}]")
         for chall in challs:
             if chall["state"] != "hidden":
-                print(f"Challenge {chall['name']} of {wave} has already been deployed (state is marked as {chall['state']})")
+                logger.warning(f"Challenge {chall['name']} of {wave} has already been deployed (state is marked as {chall['state']})")
                 continue
             handler.unhide_challenge(chall["id"])
             logger.info(f"Deployed {chall['name']} of {wave}")
-        
+
         if i < len(waves) - 1: next_time = info[waves[i+1]]["timestamp"]
-        _msg = wave_data["message"].replace("NEXT_TIMESTAMP", str(datetime.fromtimestamp(next_time)))
+
+        _msg = wave_data["message"]
+        while "{NEXT_TIMESTAMP" in _msg:
+            idx = _msg.index("{NEXT_TIMESTAMP")
+            idx2 = _msg.index("}", idx)
+            new_msg = _msg[idx:idx2+1].split(":")
+            tz_str = new_msg[1][:-1] if len(new_msg) == 2 else "UTC"
+            if len(new_msg) != 2:
+                tz = pytz.timezone("UTC")
+            else:
+                try:
+                    tz = pytz.timezone(tz_str)
+                except Exception as E:
+                    print(f"An error occurred when trying to get the timezone. Defaulting to UTC.\nError: {E.__repr__()}")
+                    tz = pytz.timezone("UTC")
+                    tz_str = "UTC"
+            new_time = datetime.fromtimestamp(next_time, tz)
+            _msg = _msg[:idx] + new_time.strftime("%d/%m/%Y %I:%M:%S %p") + f" {tz_str}" + _msg[idx2+1:]
+
         msg, title = get_notification_message(_msg, challs)
         handler.notify(msg, title)
         if info["notify-discord"]:
             msg, title = get_notification_message(_msg, challs, for_discord=True)
-            await notify_discord(msg, challs)
+            await notify_discord(msg, args.discord_webhook)
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='CTFd Waves Release')
     parser.add_argument('--ctfd-instance', type=str, help='CTFd instance URL', default=None)
     parser.add_argument('--ctfd-token', type=str, help='CTFd admin token', default=None)
     parser.add_argument('--discord-webhook', type=str, help='Discord Webhook URL', default=None)
-    parser.add_argument('--waves-file', '-f', help="Waves.JSON file that contains all the information about the waves to be released", required=True)
+    parser.add_argument('--waves-file', '-f', help="Waves.JSON file that contains all the information about the waves to be released", default=None)
     args = parser.parse_args()
 
+    args.waves_file = get_env("WAVES_FILE", curr=args.waves_file, err_msg="WAVES_FILE not set!")
+    args.discord_webhook = get_env("DISCORD_WEBHOOK", curr=args.discord_webhook, err_msg="DISCORD_WEBHOOK not set!")
+    
     handler = CTFd_Handler(args.ctfd_instance, args.ctfd_token)
     ctfd_challs = handler.get_challenges()
     info = parse_challenges(args.waves_file, ctfd_challs)

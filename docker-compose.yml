@@ -1,0 +1,10 @@
+version: '2'
+
+services:
+  wave_release:
+    build: .
+    environment:
+      - CTFD_INSTANCE=
+      - CTFD_ADMIN_TOKEN=
+      - DISCORD_WEBHOOK=
+      - WAVES_FILE=

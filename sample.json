@@ -3,29 +3,29 @@
 	"force-deploy": true,
 	"wave-1": {
 		"challenges": [
-			"jack-sparrow",
-			"jack-sparrow-2",
-			"jack-sparrow-3"
+			"Test1",
+			"Test2",
+			"Test3"
 		],
-		"message": "Wave 1 challenges have been released. Next wave will be released on NEXT_TIMESTAMP UTC!",
-		"timestamp": 1712241480
+		"message": "Wave 1 challenges have been released. Next wave will be released on {NEXT_TIMESTAMP} ({NEXT_TIMESTAMP:Asia/Karachi})",
+		"timestamp": 1714142460
 	},
 	"wave-2": {
 		"challenges": [
-			"TEST1",
-			"Test2",
-			"test3"
+			"Test4",
+			"Test5",
+			"Test6"
 		],
-		"message": "Wave 2 challenges have been released. Next wave will be released on NEXT_TIMESTAMP UTC!",
-		"timestamp": 1712241600
+		"message": "Wave 2 challenges have been released. Next wave will be released on {NEXT_TIMESTAMP} ({NEXT_TIMESTAMP:Asia/Karachi})",
+		"timestamp": 1714142580
 	},
 	"wave-3": {
 		"challenges": [
-			"test4",
-			"test5",
-			"test6"
+			"Test7",
+			"Test8",
+			"Test9"
 		],
-		"message": "Final wave  has been released. Good luck!",
-		"timestamp": 0
+		"message": "Final wave has been released. Good luck!",
+		"timestamp": 1714142700
 	}
 }
